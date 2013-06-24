@@ -1,0 +1,23 @@
+# Write your default config options here!
+#va=alsa
+#vo=vdpau
+vo=xv
+ao=pulse
+#vc=ffmpeg12vdpau,ffwmv3vdpau,ffvc1vdpau,ffh264vdpau,ffodivxvdpau,
+fs=yes
+#fontconfig=0
+font="WenQuanYi Micro Hei"
+subcp=utf8
+#subcp=gbk
+#subcp=big5
+#unicode=1
+#utf8=1
+slang=zh,cn,gb,chs,cht
+sub-fuzziness=1
+ass=1
+embeddedfonts=1
+spuaa=2
+subfont-osd-scale=2
+osdlevel=3
+subfont-autoscale=1
+subfont-text-scale=7
