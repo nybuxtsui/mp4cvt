@@ -7,7 +7,7 @@ g_tune = 'animation'
 
 parser = optparse.OptionParser()
 parser.add_option('-a', '--action',
-                  dest='action', choices=['cvt', 'info', 'cat'], default='cvt')
+                  dest='action', choices=['cvt', 'info', 'cat', 'extract'], default='cvt')
 parser.add_option('-i', '--input',
                   dest='input', metavar='FILE')
 parser.add_option('-t', '--tune',
@@ -20,8 +20,8 @@ parser.add_option('-o', '--options',
                   dest='options', default='')
 parser.add_option('-p', '--program',
                   dest='program', default='f', choices=['m', 'f'])
+parser.add_option('-r', '--track', default='2', dest='track')
 (options, args) = parser.parse_args()
-
 
 def get_media_info(f):
     try:
@@ -69,6 +69,12 @@ def get_media_info(f):
         elif isaudio and l[0:8] == 'Bitrate:':
             info['audio_bitrate'] = float(l[8:-4])
     return info
+
+def extrace_mkv_ass(f):
+    name = os.path.splitext(f)[0]
+    cmd = 'mkvextract tracks %s.mkv %s:%s.ass' % (name, options.track, name)
+    print cmd
+    os.system(cmd)
 
 def get_subfile(info):
     name = os.path.splitext(info['filename'])[0]
@@ -153,7 +159,7 @@ def get_video_opt(info):
         cmd = cmd + ' -c:v libx264 -crf 22 -preset veryfast -vprofile main -level 31 -tune %s ' % (options.tune)
         width = info['width']
         height = info['height']
-        vf = [] 
+        vf = []
         if (height > 480):
             sar = width / float(height)
             height = 480
@@ -177,7 +183,7 @@ def get_audio_opt(info):
         elif options.aaccopy == 'off':
             return ' -c:a libfaac -b:a 96k '
         else: # aaccopy == 'auto'
-            if info['audio_bitrate'] == 0: 
+            if info['audio_bitrate'] == 0:
                 os.system('ffmpeg -i "%s" -vn -c:a copy -y %s/a.aac' % (info['filename'], g_tmp))
                 bitrate = os.path.getsize('%s/a.aac' % (g_tmp)) / info['duration'] * 8 / 1024
                 os.remove('%s/a.aac' % (g_tmp))
@@ -232,6 +238,10 @@ if options.action == 'info':
     exit(0)
 if options.action == 'cat':
     concat(options.input)
+    exit(0)
+if options.action == 'extract':
+    extrace_mkv_ass(options.input)
+    exit(0)
 if options.action == 'cvt':
     info = get_media_info(options.input)
     name = os.path.splitext(os.path.basename(options.input))[0]
@@ -252,7 +262,5 @@ if options.action == 'cvt':
         convert_audio(info)
         convert_video(info)
         os.system('MP4Box -fps 23.976 -add %s/a.h264 -add %s/a.aac %s' % (g_tmp, g_tmp, out))
-
     exit(0)
-    
 
