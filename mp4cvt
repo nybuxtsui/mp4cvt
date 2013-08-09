@@ -105,7 +105,7 @@ def can_copy_video(info):
     return True
 
 def convert_video(info):
-    cmd = 'mencoder "%s" -ovc x264 -x264encopts preset=veryfast:crf=22:tune=%s:profile=main:level=31 -nosound ' % (info['filename'], options.tune)
+    cmd = 'mencoder "%s" -ovc x264 -x264encopts preset=veryfast:crf=26:tune=%s:profile=main:level=31 -nosound ' % (info['filename'], options.tune)
     width = info['width']
     height = info['height']
     cmd = cmd + ' -ofps 24000/1001 '
@@ -156,7 +156,7 @@ def get_video_opt(info):
         cmd = ''
         #if info['fps'] == 0 or info['fps'] > 23.98:
             #cmd = cmd + ' -r 24000/1001 -vsync 1'
-        cmd = cmd + ' -c:v libx264 -crf 22 -preset veryfast -vprofile main -level 31 -tune %s ' % (options.tune)
+        cmd = cmd + ' -c:v libx264 -crf 26 -preset veryfast -vprofile main -level 31 -tune %s ' % (options.tune)
         width = info['width']
         height = info['height']
         vf = []
@@ -213,10 +213,11 @@ def concat(file):
     r = re.compile('^' + base)
     l = []
     for f in os.listdir(dir):
-        print f
         if r.match(f) is not None:
             l.append(os.path.join(dir, f))
     l.sort()
+    for f in l:
+        print f
     if len(l) != 0:
         f = open('%s/concat.txt' % (g_tmp), 'w')
         for i in l:
