@@ -1,6 +1,6 @@
-export C_INCLUDE_PATH=$HOME/include
-export CPLUS_INCLUDE_PATH=$HOME/include
-export LIBRARY_PATH=$HOME/lib
+export C_INCLUDE_PATH=$HOME/local/ffmpeg/include
+export CPLUS_INCLUDE_PATH=$HOME/local/ffmpeg/include
+export LIBRARY_PATH=$HOME/local/ffmpeg/include
 
 sudo apt-get remove ffmpeg x264 libx264-dev
 
@@ -13,70 +13,58 @@ libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libsdl1.2-dev libtheo
 libva-dev libvdpau-dev libvorbis-dev libx11-dev libxfixes-dev texi2html yasm zlib1g-dev \
 libxv-dev libasound2-dev libpulse-dev libgif-dev libesd0-dev libjpeg-dev libfontconfig1-dev libass-dev
 
+sudo apt-get install mkvtoolnix mediainfo
+
+mkdir ~/local/ffmpeg/build
+cd ~/local/ffmpeg/build
 
 
-mkdir ~/build
-cd ~/build
-
-
-sudo apt-get remove yasm
-wget http://www.tortall.net/projects/yasm/releases/yasm-1.2.0.tar.gz
-tar xzvf yasm-1.2.0.tar.gz
-cd yasm-1.2.0
-./configure --prefix=$HOME
-make -j
-make install
-
-
+cd ~/local/ffmpeg/build
 git clone git://git.videolan.org/x264
 cd x264
-./configure --enable-static --enable-shared --prefix=$HOME
+./configure --enable-static --enable-shared --prefix=$HOME/local/ffmpeg
 make -j
 make install
 
+cd ~/local/ffmpeg/build
 git clone --depth 1 git://github.com/mstorsjo/fdk-aac.git
 cd fdk-aac
 autoreconf -fiv
-./configure --enable-static --disable-shared --prefix=$HOME
+./configure --enable-static --disable-shared --prefix=$HOME/local/ffmpeg
 make -j
 make install
 
+cd ~/local/ffmpeg/build
 
-cd ~/build
-git clone http://git.chromium.org/webm/libvpx.git
-cd libvpx
-./configure --prefix=$HOME
-make -j
-make install
+cd ~/local/ffmpeg/build
+git clone --depth 1 https://github.com/FFmpeg/FFmpeg
+mv FFMpeg ffmpeg
+cp -r ffmpeg mplayer
 
-cd ~/build/
 svn checkout svn://svn.mplayerhq.hu/mplayer/trunk mplayer
 cd mplayer
 ./configure \
   --enable-runtime-cpudetection \
   --enable-x264 --enable-gif --enable-png --enable-jpeg\
-  --prefix=$HOME \
+  --prefix=$HOME/local/ffmpeg \
   --extra-libs=-lx264 \
-  --extra-cflags=-I$HOME/include \
-  --extra-ldflags=-L$HOME/lib
-
+  --extra-cflags=-I$HOME/local/ffmpeg/include \
+  --extra-ldflags=-L$HOME/local/ffmpeg/lib
 make -j
 make install
 
-cd ~/build
-git clone --depth 1 git://source.ffmpeg.org/ffmpeg
+
 cd ffmpeg
 ./configure --enable-gpl --enable-version3 --enable-nonfree \
   --enable-libfaac --enable-libfdk-aac --enable-libmp3lame \
   --enable-libtheora --enable-libvorbis \
   --enable-libx264 \
   --enable-postproc --enable-x11grab --enable-libass\
-  --prefix=$HOME \
+  --prefix=$HOME/local/ffmpeg \
   --extra-libs="-lx264 -lfdk-aac" \
-  --extra-cflags=-I$HOME/include \
-  --extra-ldflags=-L$HOME/lib
+  --extra-cflags=-I$HOME/local/ffmpeg/include \
+  --extra-ldflags=-L$HOME/local/ffmpeg/lib
 
 make -j
 make install
-
 
