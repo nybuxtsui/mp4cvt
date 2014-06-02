@@ -244,13 +244,13 @@ if options.action == 'extract':
     extrace_mkv_ass(options.input)
     exit(0)
 if options.action == 'cvt':
-    info = get_media_info(options.input)
     name = os.path.splitext(os.path.basename(options.input))[0]
     out = name + "." + options.format
     if os.path.exists(out):
         print 'target file exist'
         exit(1)
 
+    info = get_media_info(options.input)
     if options.program == 'f':
         cmd = 'ffmpeg -i "%s" -sn -metadata title="%s" %s ' % (info['filename'], name, options.options)
         cmd = cmd + get_audio_opt(info)
