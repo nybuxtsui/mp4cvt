@@ -156,7 +156,7 @@ def get_video_opt(info):
         cmd = ''
         #if info['fps'] == 0 or info['fps'] > 23.98:
             #cmd = cmd + ' -r 24000/1001 -vsync 1'
-        cmd = cmd + ' -c:v libx264 -crf 26 -preset veryfast -vprofile main -level 31 -tune %s ' % (options.tune)
+        cmd = cmd + ' -c:v libx264 -crf 26 -preset veryfast -profile:v main -level 3.1 -tune %s ' % (options.tune)
         width = info['width']
         height = info['height']
         vf = []
@@ -264,4 +264,3 @@ if options.action == 'cvt':
         convert_video(info)
         os.system('MP4Box -fps 23.976 -add %s/a.h264 -add %s/a.aac %s' % (g_tmp, g_tmp, out))
     exit(0)
-
