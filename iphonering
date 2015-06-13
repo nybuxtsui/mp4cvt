@@ -1,0 +1,12 @@
+#!/usr/bin/env python
+
+import optparse, os
+
+parser = optparse.OptionParser()
+parser.add_option('-i', '--input', dest='input', metavar='FILE')
+(options, args) = parser.parse_args()
+
+print options.input
+name = os.path.splitext(os.path.basename(options.input))[0]
+out = name + ".m4a"
+os.system('ffmpeg -i %s -c:a libfdk_aac -profile:a aac_he_v2 -b:a 96k %s' % (options.input, out))
