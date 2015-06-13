@@ -9,4 +9,4 @@ parser.add_option('-i', '--input', dest='input', metavar='FILE')
 print options.input
 name = os.path.splitext(os.path.basename(options.input))[0]
 out = name + ".m4a"
-os.system('ffmpeg -i %s -vn -c:a libfdk_aac -profile:a aac_he_v2 -b:a 96k %s' % (options.input, out))
+os.system('ffmpeg -i "%s" -vn -c:a libfdk_aac -profile:a aac_he_v2 -b:a 96k "%s"' % (options.input, out))
