@@ -19,8 +19,9 @@ parser.add_option('-c', '--aaccopy',
 parser.add_option('-o', '--options',
                   dest='options', default='')
 parser.add_option('-p', '--program',
-                  dest='program', default='f', choices=['m', 'f'])
+                  dest='program', default='f', choices=['m', 'f', 'u'])
 parser.add_option('-r', '--track', default='2', dest='track')
+parser.add_option('-u', '--update', default=False, dest='update', action='store_true')
 parser.add_option('-s', '--height', default='480', dest='height')
 parser.add_option('-q', '--crf', default='26', dest='crf')
 (options, args) = parser.parse_args()
@@ -258,6 +259,12 @@ if options.action == 'cvt':
         cmd = 'ffmpeg -i "%s" -sn -metadata title="%s" %s ' % (info['filename'], name, options.options)
         cmd = cmd + get_audio_opt(info)
         cmd = cmd + get_video_opt(info)
+        cmd = cmd + ' -y ' + g_tmp + '/a.' + options.format
+        print cmd
+        os.system(cmd)
+        shutil.move(g_tmp + '/a.' + options.format, out)
+    elif options.program == 'u':
+        cmd = 'ffmpeg -i "%s" -sn -metadata title="%s" -codec copy %s ' % (info['filename'], name, options.options)
         cmd = cmd + ' -y ' + g_tmp + '/a.' + options.format
         print cmd
         os.system(cmd)
