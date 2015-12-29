@@ -19,7 +19,7 @@ function get_subfile(filename) {
     if (fs.existsSync(subfile)) {
         return subfile;
     }
-    subfile = filename + '.srt';
+    subfile = filename + '.ass';
     if (fs.existsSync(subfile)) {
         return subfile;
     }
@@ -45,7 +45,6 @@ function can_copy_video(info) {
         return false;
     }
     if (info.profile != 'high' && info.profile != 'main') {
-        console.log("aa")
         return false;
     }
     if (info.level > 31) {
@@ -73,11 +72,11 @@ function get_video_opt(info) {
         let width = Math.floor((height * sar) / 16 * 16);
         vf.push(util.format('scale=%d:%d', width, height))
     }
-    let subfile = get_subfile(info);
+    let subfile = get_subfile(info.filename);
     if (subfile) {
         let ext = path.extname(subfile);
         if (ext == '.ass') {
-            vf.push('ass="{}"', subfile);
+            vf.push(util.format('ass="%s"', subfile));
         } else if (ext == ".srt") {
             vf.append(util.format('subtitles="%s"', subfile))
         }
@@ -98,8 +97,10 @@ function get_audio_opt(info) {
 
 
 function get_media_info(filename, callback) {
-    exec('ffprobe -v quiet -print_format json -show_format -show_streams ' + filename, function(err, stdout, stderr) {
-        if (err) throw err;
+    exec('ffprobe -v quiet -print_format json -show_format -show_streams "' + filename + '"', function(err, stdout, stderr) {
+        if (err) {
+            throw err;
+        }
         let data = JSON.parse(stdout);
         let hasvideo = false;
         let hasaudio = false;
