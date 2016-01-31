@@ -1,26 +1,17 @@
 #!/usr/bin/env node
 'use strict';
 
-let exec = require('child_process').exec;
-let path = require('path'); 
+//let exec = require('child_process').exec;
+let path = require('path');
 let fs = require('fs');
 let util = require('util');
-
-b = 3
 
 let config = {
     height: 480,
     crf: 26,
     tune: 'animation',
-    tmpdir: '.'
-}
-
-function get_audio_option(info) {
-    if (info.isaac && info.audio_bitrate > 120) {
-        return ' -c:a libfaac -b:a 96k '
-    } else {
-        return ' -c:a copy '
-    }
+    tmpdir: '/Volumes/ramdisk',
+    _$_: ''
 }
 
 function get_subfile(filename) {
@@ -28,7 +19,7 @@ function get_subfile(filename) {
     if (fs.existsSync(subfile)) {
         return subfile;
     }
-    subfile = filename + '.srt';
+    subfile = filename + '.ass';
     if (fs.existsSync(subfile)) {
         return subfile;
     }
@@ -54,7 +45,6 @@ function can_copy_video(info) {
         return false;
     }
     if (info.profile != 'high' && info.profile != 'main') {
-        console.log("aa")
         return false;
     }
     if (info.level > 31) {
@@ -69,7 +59,7 @@ function can_copy_video(info) {
     return true;
 }
 
-function get_video_option(info) {
+function get_video_opt(info) {
     if (can_copy_video(info)) {
         return ' -c:v copy ';
     }
@@ -77,16 +67,16 @@ function get_video_option(info) {
     let cmd = util.format(templ, config.crf, config.tune);
     let vf = [];
     if (info.height > config.height) {
-        let sar = width / height;
-        height = config.height;
-        width = Math.floor((height * sar) / 16 * 16);
+        let sar = info.width / info.height;
+        let height = config.height;
+        let width = Math.floor((height * sar) / 16) * 16;
         vf.push(util.format('scale=%d:%d', width, height))
     }
-    let subfile = get_subfile(info);
+    let subfile = get_subfile(info.filename);
     if (subfile) {
         let ext = path.extname(subfile);
         if (ext == '.ass') {
-            vf.push('ass="{}"', subfile);
+            vf.push(util.format('ass="%s"', subfile));
         } else if (ext == ".srt") {
             vf.append(util.format('subtitles="%s"', subfile))
         }
@@ -97,9 +87,35 @@ function get_video_option(info) {
     return cmd;
 }
 
-function get_media_info(filename, callback) {
-    exec('ffprobe -v quiet -print_format json -show_format -show_streams ' + filename, function(err, stdout, stderr) {
-        if (err) throw err;
+function get_audio_opt(info) {
+    if (info.isavc && info.isaac && info.audio_bitrate <= 120) {
+        return ' -c:a copy '
+    } else {
+        return ' -c:a libfaac -b:a 96k '
+    }
+}
+
+function exec(cmd, pout, perr) {
+    return new Promise((resolve, reject) => {
+        let p = require('child_process').exec(cmd, (err, stdout, stderr) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(stdout)
+            }
+        });
+        if (pout) {
+            p.stdout.pipe(pout);
+        }
+        if (perr) {
+            p.stderr.pipe(perr);
+        }
+    });
+}
+
+function get_media_info(filename) {
+    let ffprobe_cmd = 'ffprobe -v quiet -print_format json -show_format -show_streams "%s"';
+    return exec(util.format(ffprobe_cmd, filename)).then((stdout) => {
         let data = JSON.parse(stdout);
         let hasvideo = false;
         let hasaudio = false;
@@ -125,23 +141,32 @@ function get_media_info(filename, callback) {
             }
         }
         //console.log(info);
-        callback(info);
-    })
-}
-
-function convert(filename) {
-    get_media_info(filename, function(info) {
-        let ext = path.extname(filename);
-        let dir = path.dirname(filename);
-        let base = path.basename(filename, ext);
-
-        let cmd = util.format('ffmpeg -i "%s" -sn -metadata title="%s" ', filename, base);
-        cmd += get_audio_option(info);
-        cmd += get_video_option(info);
-        cmd += util.format(' -y %s', path.join(config.tmpdir, 'a.mp4'));
-
-        console.log(cmd);
+        return info;
     });
 }
 
-convert('c:\\users\\xubin\\c01.mp4')
+function convert(filename) {
+    get_media_info(filename).then((info) => {
+        let ext = path.extname(filename).toLowerCase();
+        let dir = path.normalize(path.dirname(filename));
+        let base = path.basename(filename, ext);
+
+        let target = ''
+        let target2 = ''
+        if ((dir == '.' || dir == __dirname) && ext == '.mp4') {
+            target = base + '.mp4cvt.mp4'
+        } else {
+            target = base + '.mp4'
+        }
+        let ffmpeg_cmd = 'ffmpeg -i "%s" -sn -metadata title="%s" %s %s -n "%s"';
+        let cmd = util.format(ffmpeg_cmd, filename, base, get_audio_opt(info), get_video_opt(info), target);
+        console.log(cmd)
+        return cmd;
+    }).then((cmd) => {
+        return exec(cmd, process.stdout, process.stdout);
+    }).catch((e) => {
+        console.log(err.stack)
+    });
+}
+
+convert(process.argv[2]);
