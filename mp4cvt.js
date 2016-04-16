@@ -56,6 +56,9 @@ function can_copy_video(info) {
     if (get_subfile(info.filename)) {
         return false;
     }
+    if (info.bitrate > 600000) {
+        return false;
+    }
     return true;
 }
 
@@ -96,11 +99,14 @@ function get_audio_opt(info) {
 }
 
 function exec(cmd, pout, perr) {
+    console.log('exec:', cmd);
     return new Promise((resolve, reject) => {
         let p = require('child_process').exec(cmd, (err, stdout, stderr) => {
             if (err) {
+                console.log('failed:', cmd);
                 reject(err);
             } else {
+                console.log('finish:', cmd);
                 resolve(stdout)
             }
         });
@@ -114,11 +120,12 @@ function exec(cmd, pout, perr) {
 }
 
 function get_media_info(filename) {
-    let ffprobe_cmd = 'ffprobe -v quiet -print_format json -show_format -show_streams "%s"';
-    return exec(util.format(ffprobe_cmd, filename)).then((stdout) => {
+    let ffprobe_cmd = util.format('ffprobe -v quiet -print_format json -show_format -show_streams "%s"', filename);
+    return exec(ffprobe_cmd, null, null).then((stdout) => {
         let data = JSON.parse(stdout);
         let hasvideo = false;
         let hasaudio = false;
+        let hassub = false;
         let info = {
             filename: filename
         }
@@ -132,21 +139,49 @@ function get_media_info(filename) {
                 }
                 info.width = stream.width;
                 info.height = stream.height;
-            } if (!hasaudio && stream.codec_type == 'audio') {
+                info.bitrate = parseInt(stream.bit_rate);
+                if (isNaN(info.bitrate)) {
+                    info.bitrate = 9999999;
+                }
+            } else if (!hasaudio && stream.codec_type == 'audio') {
                 hasaudio = true;
                 if (stream.codec_name = 'aac') {
                     info.isaac = true;
                     info.audio_bitrate = Math.floor(parseInt(stream.bit_rate) / 1000);
+                    if (isNaN(info.audio_bitrate)) {
+                        info.audio_bitrate = 9999999;
+                    }
                 }
+            } else if (!hassub && stream.codec_type == 'subtitle') {
+                hassub = true;
+                info.subindex = stream.index;
+                info.sub = stream.codec_name;
             }
         }
-        //console.log(info);
         return info;
     });
 }
 
 function convert(filename) {
     get_media_info(filename).then((info) => {
+        if ('sub' in info) {
+            let subfile = util.format('%s.%s', filename, info.sub);
+            let cmd = 'ffmpeg -i "%s" -an -vn -c:s:%d %s -n "%s"';
+            cmd = util.format(cmd, filename, info.subindex, info.sub, subfile);
+            return exec(cmd, process.stdout, null).then((stdout) => {
+                return info;
+            }).catch((err) => {
+                if (err.message.indexOf('already exists') > -1) {
+                    console.log('subtitle already exist');
+                    return info;
+                } else {
+                    throw err;
+                }
+            });
+        } else {
+            return info;
+        }
+    }).then((info) => {
         let ext = path.extname(filename).toLowerCase();
         let dir = path.normalize(path.dirname(filename));
         let base = path.basename(filename, ext);
@@ -160,12 +195,15 @@ function convert(filename) {
         }
         let ffmpeg_cmd = 'ffmpeg -i "%s" -sn -metadata title="%s" %s %s -n "%s"';
         let cmd = util.format(ffmpeg_cmd, filename, base, get_audio_opt(info), get_video_opt(info), target);
-        console.log(cmd)
         return cmd;
     }).then((cmd) => {
         return exec(cmd, process.stdout, process.stdout);
-    }).catch((e) => {
-        console.log(err.stack)
+    }).catch((err) => {
+        if (err.message.indexOf('already exists') > -1) {
+            console.log('target file already exist');
+        } else {
+            console.log(err.message)
+        }
     });
 }
 
