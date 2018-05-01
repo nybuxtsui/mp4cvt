@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -19,11 +21,12 @@ var config = loadConfig()
 
 // Config config
 type Config struct {
-	Height    int
-	Overwrite bool
-	Target    string
-	VArgs     string
-	AArgs     string
+	Height     int
+	Overwrite  bool
+	Target     string
+	AACEncoder string
+	VArgs      string
+	AArgs      string
 }
 
 // VideoInfo video
@@ -56,12 +59,18 @@ type MediaInfo struct {
 	Sub   []SubInfo
 }
 
+// PreVArgs pre
+const PreVArgs = "-crf 25 -r 25 -preset faster -profile:v main -level 3.1 -tune film"
+
+// PreAArgs pre
+const PreAArgs = "-b:a 96k"
+
 // NewConfig create new config with default value
 func NewConfig() Config {
 	return Config{
 		Height: 720,
-		AArgs:  "-c:a aac -b:a 96k",
-		VArgs:  "-c:v libx264 -crf 25 -r 25 -preset faster -profile:v main -level 3.1 -tune film",
+		VArgs:  PreVArgs,
+		AArgs:  PreAArgs,
 	}
 }
 
@@ -80,7 +89,7 @@ func loadConfig() Config {
 }
 
 func fileExist(filename string) bool {
-	if _, err := os.Stat("/path/to/whatever"); err == nil {
+	if _, err := os.Stat(filename); err == nil {
 		return true
 	}
 	return false
@@ -120,9 +129,11 @@ func getSubfile(filename string) string {
 func getAudioOpts(audio AudioInfo) []string {
 	if audio.AAC && audio.BitRate <= 120 {
 		return []string{"-c:a", "copy"}
-	} else {
-		return strings.Split(config.AArgs, " ")
 	}
+	args := make([]string, 0, 10)
+	args = append(args, "-c:a", config.AACEncoder)
+	args = append(args, strings.Split(config.AArgs, " ")...)
+	return args
 }
 
 func canCopyVideo(video VideoInfo) bool {
@@ -146,7 +157,10 @@ func getVideoOpts(video VideoInfo) []string {
 		return []string{"-c:v", "copy"}
 	}
 
-	args := strings.Split(config.VArgs, " ")
+	args := make([]string, 0, 20)
+	args = append(args, "-c:v", "libx264")
+	args = append(args, strings.Split(config.VArgs, " ")...)
+
 	vf := make([]string, 0, 10)
 	if video.Height > config.Height {
 		sar := float64(video.Width) / float64(video.Height)
@@ -164,7 +178,7 @@ func getVideoOpts(video VideoInfo) []string {
 		}
 	}
 	if len(vf) > 0 {
-		args = append(args, "-vf ", strings.Join(vf, ","))
+		args = append(args, "-vf", strings.Join(vf, ","))
 	}
 	return args
 }
@@ -180,7 +194,28 @@ func removeEmptyArgs(args []string) []string {
 }
 
 func main() {
-	log.Printf("config:%q", config)
+	if config.AACEncoder == "" {
+		encoders, err := exec.Command("ffmpeg", "-encoders").Output()
+		if err != nil {
+			log.Fatalf("find encoders failed:%s", err.Error())
+		}
+		scanner := bufio.NewScanner(bytes.NewReader(encoders))
+		for scanner.Scan() {
+			str := scanner.Text()
+			if strings.Contains(str, "libfdk_aac") {
+				config.AACEncoder = "libfdk_aac"
+				break
+			} else if strings.Contains(str, "libfaac") {
+				config.AACEncoder = "libfaac"
+				break
+			}
+		}
+		if config.AACEncoder == "" {
+			config.AACEncoder = "aac"
+		}
+	}
+	log.Printf("config:%+v", config)
+
 	if config.Target != "" {
 		if _, err := os.Lstat(config.Target); os.IsNotExist(err) {
 			os.MkdirAll(config.Target, 0755)
@@ -207,7 +242,7 @@ func main() {
 		}
 		_, err := exec.Command("ffmpeg", args...).Output()
 		if err != nil {
-			log.Fatalln("extract sub failed:%s,%s", strings.Join(args, " "), err.Error())
+			log.Fatalf("extract sub failed:%s,%s", strings.Join(args, " "), err.Error())
 		}
 	}
 	dir, basename, _ := splitPath(filename)
