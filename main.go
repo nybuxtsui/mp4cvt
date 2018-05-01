@@ -19,11 +19,11 @@ var config = loadConfig()
 
 // Config config
 type Config struct {
-	Height int
-	CRF    int
-	Tune   string
-	Preset string
-	FPS    int
+	Height    int
+	Overwrite bool
+	Target    string
+	VArgs     string
+	AArgs     string
 }
 
 // VideoInfo video
@@ -60,10 +60,8 @@ type MediaInfo struct {
 func NewConfig() Config {
 	return Config{
 		Height: 720,
-		CRF:    25,
-		Tune:   "film",
-		Preset: "veryfast",
-		FPS:    25,
+		AArgs:  "-c:a aac -b:a 96k",
+		VArgs:  "-c:v libx264 -crf 25 -r 25 -preset faster -profile:v main -level 3.1 -tune film",
 	}
 }
 
@@ -78,35 +76,7 @@ func loadConfig() Config {
 			log.Println("load mp4cvt.yaml failed:", err.Error())
 		}
 	}
-
 	return config
-}
-
-func splitArgs(str string, args ...interface{}) []string {
-	items := strings.Split(str, " ")
-	pos := 0
-	for i := range items {
-		if items[i] == "%" {
-			items[i] = fmt.Sprintf("%v", args[pos])
-			pos++
-		}
-	}
-	return items
-}
-
-func run(cmdname string, args ...string) error {
-	cmd := exec.Command(cmdname, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func getAudioOpts(audio AudioInfo) []string {
-	if audio.AAC && audio.BitRate <= 120 {
-		return []string{"-c:a", "copy"}
-	} else {
-		return []string{"-c:a", "libfaac", "-b:a", "96k"}
-	}
 }
 
 func fileExist(filename string) bool {
@@ -116,12 +86,13 @@ func fileExist(filename string) bool {
 	return false
 }
 
-func splitFilename(filename string) (string, string, string) {
+func splitPath(filename string) (string, string, string) {
 	dir, base := filepath.Split(filename)
 	ext := filepath.Ext(filename)
 	basename := base[0 : len(base)-len(ext)]
 	return dir, basename, ext
 }
+
 func getSubfile(filename string) string {
 	subfile := filename + ".srt"
 	if fileExist(subfile) {
@@ -132,7 +103,7 @@ func getSubfile(filename string) string {
 		return subfile
 	}
 
-	dir, basename, _ := splitFilename(filename)
+	dir, basename, _ := splitPath(filename)
 
 	subfile = filepath.Join(dir, basename+".ass")
 	if fileExist(subfile) {
@@ -146,27 +117,36 @@ func getSubfile(filename string) string {
 	return ""
 }
 
-func getVideoOpts(video VideoInfo) []string {
-	canCopy := func() bool {
-		if !video.AVC {
-			return false
-		}
-		if video.Height > config.Height {
-			return false
-		}
-		if getSubfile(video.Filename) != "" {
-			return false
-		}
-		if video.BitRate > 600000 {
-			return false
-		}
-		return true
+func getAudioOpts(audio AudioInfo) []string {
+	if audio.AAC && audio.BitRate <= 120 {
+		return []string{"-c:a", "copy"}
+	} else {
+		return strings.Split(config.AArgs, " ")
 	}
-	if canCopy() {
+}
+
+func canCopyVideo(video VideoInfo) bool {
+	if !video.AVC {
+		return false
+	}
+	if video.Height > config.Height {
+		return false
+	}
+	if getSubfile(video.Filename) != "" {
+		return false
+	}
+	if video.BitRate > 600000 {
+		return false
+	}
+	return true
+}
+
+func getVideoOpts(video VideoInfo) []string {
+	if canCopyVideo(video) {
 		return []string{"-c:v", "copy"}
 	}
 
-	args := fmt.Sprintf("-c:v libx264 -crf %d -r %d -preset %s -profile:v main -level 3.1 -tune %s", config.CRF, config.FPS, config.Preset, config.Tune)
+	args := strings.Split(config.VArgs, " ")
 	vf := make([]string, 0, 10)
 	if video.Height > config.Height {
 		sar := float64(video.Width) / float64(video.Height)
@@ -184,39 +164,80 @@ func getVideoOpts(video VideoInfo) []string {
 		}
 	}
 	if len(vf) > 0 {
-		args = args + " -vf " + strings.Join(vf, ",")
+		args = append(args, "-vf ", strings.Join(vf, ","))
 	}
-	return strings.Split(args, " ")
+	return args
+}
+
+func removeEmptyArgs(args []string) []string {
+	result := make([]string, 0, len(args))
+	for _, v := range args {
+		if v != "" {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func main() {
-	_ = config
+	log.Printf("config:%q", config)
+	if config.Target != "" {
+		if _, err := os.Lstat(config.Target); os.IsNotExist(err) {
+			os.MkdirAll(config.Target, 0755)
+		}
+	}
 	filename := os.Args[1]
 	mediaInfo := getMediaInfo(filename)
 	if len(mediaInfo.Sub) > 0 {
 		sub := mediaInfo.Sub[0]
-		args := splitArgs("-i % -an -vn -c:s:% % -n %.%", filename, sub.Index, sub.Sub, filename, sub.Sub)
+		target := filename + "." + sub.Sub
+		if config.Target != "" {
+			_, basename, ext := splitPath(filename)
+			target = filepath.Join(config.Target, basename+ext+"."+sub.Sub)
+		}
+		args := []string{
+			"-i",
+			filename,
+			"-an",
+			"-vn",
+			"-c:s:" + strconv.Itoa(sub.Index),
+			sub.Sub,
+			"-n",
+			target,
+		}
 		_, err := exec.Command("ffmpeg", args...).Output()
 		if err != nil {
-			log.Fatalln("extract sub failed:", err.Error())
+			log.Fatalln("extract sub failed:%s,%s", strings.Join(args, " "), err.Error())
 		}
 	}
-	dir, basename, ext := splitFilename(filename)
+	dir, basename, _ := splitPath(filename)
 	args := []string{
 		"-i", filename, "-sn", "-metadata", `title="` + basename + `"`,
 	}
+	if config.Overwrite {
+		args = append([]string{"-y"}, args...)
+	}
 	args = append(args, getVideoOpts(mediaInfo.Video[0])...)
 	args = append(args, getAudioOpts(mediaInfo.Audio[0])...)
-	args = append(args, filepath.Join(dir, basename+".mp4cvt"+ext))
-	log.Println(args)
-	run("ffmpeg", args...)
+
+	target := filepath.Join(dir, basename+".mp4cvt.mp4")
+	if config.Target != "" {
+		target = filepath.Join(config.Target, basename+".mp4")
+	}
+	args = append(args, target)
+	log.Printf("ffmpeg %s", strings.Join(args, " "))
+	cmd := exec.Command("ffmpeg", removeEmptyArgs(args)...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
 }
 
 func getMediaInfo(filename string) MediaInfo {
-	ffprobeArgs := strings.Split("-v quiet -print_format json -show_format -show_streams", " ")
+	args := "-v quiet -print_format json -show_format -show_streams"
+	ffprobeArgs := strings.Split(args, " ")
 	stdout, err := exec.Command("ffprobe", append(ffprobeArgs, filename)...).Output()
 	if err != nil {
-		log.Fatalln("exec ffprobe failed:", err.Error())
+		log.Fatalf("exec ffprobe failed:%s,%s", args, err.Error())
 	}
 
 	var data struct {
